@@ -6,7 +6,7 @@
 #define INVALID_KEY "INVALID_KEY"
 
 typedef struct entry {
-  char *key;
+  char key[50];
   void *value;
 } entry;
 
@@ -23,7 +23,6 @@ int hash(const char *key, int elementLength) {
   int hash = 0;
   for (x = (const unsigned char *)key; *x; x++) {
     int y = (*x % 26);
-    unsigned int test = primes[y];
     hash = hash * primes[y] + *x;
   }
 
@@ -34,42 +33,47 @@ int hash(const char *key, int elementLength) {
 
 void hashtableFillEntry(hashtable *ht, entry *value);
 
-void hashtableCreate(int elementStride, int elementLength,
-                     hashtable *outHashtable) {
+hashtable* hashtableCreate(int elementStride, int elementLength, char isPointerData) {
+  hashtable* outHashtable = malloc(sizeof(hashtable));
   void *memory = malloc(elementLength * (elementStride + sizeof(entry)));
-  memset(memory, 0, elementStride * elementLength);
+  memset(outHashtable, 0, sizeof(hashtable));
   outHashtable->elementStride = elementStride;
   outHashtable->elementLength = elementLength;
+  outHashtable->isPointerData = isPointerData;
   outHashtable->memory = memory;
+  memset(outHashtable->memory, 0, (elementStride + sizeof(entry)) * elementLength);
   entry e;
-  e.key = INVALID_KEY;
+  strcpy(e.key, INVALID_KEY);
+  e.value = 0;
   hashtableFillEntry(outHashtable, &e);
-  return;
+  return outHashtable;
+}
+
+
+void printHt(hashtable *ht) {
+  for (int i = 0; i < ht->elementLength; i++) {
+    entry *e = (entry *)(ht->memory + (sizeof(entry) * i));
+    printf("EK %s\n", e->key);
+  }
 }
 
 void hashtableDestroy(hashtable *ht) {
-  for (int i = 0; i < ht->elementLength; i++) {
-    entry *e = (entry *)ht->memory + (ht->elementStride * i);
-    free(e->key);
-    if (e->value) {
-      free(e->value);
-    }
-  }
-
-  free(ht->memory);
+    printHt(ht);
+    free(ht->memory);
+    free(ht);
 }
 
 char hashtableSet(hashtable *ht, const char *key, void *value) {
   int h = hash(key, ht->elementLength);
   int y = h;
   for (int i = 0; i < ht->elementLength; i++) {
-    entry *e = (entry *)ht->memory + (ht->elementStride * y);
-
-    if (strcmp(e->key, key) || strcmp(e->key, INVALID_KEY)) {
+    entry *e = (entry *)(ht->memory + (sizeof(entry) * y));
+    printf(" HI: %s\n", e->key);
+    if (!strcmp(e->key, key) || !strcmp(e->key, INVALID_KEY)) {
       entry t;
-      t.key = key;
+      strcpy(t.key, key);
       t.value = value;
-      memcpy(e, &t, ht->elementStride + sizeof(entry));
+      memcpy(e, &t, sizeof(entry));
       return 1;
     }
     y++;
@@ -79,33 +83,46 @@ char hashtableSet(hashtable *ht, const char *key, void *value) {
   return 0;
 }
 
-void *hashtableGet(hashtable *ht, const char *key) {
+void hashtableGet(hashtable *ht, const char *key, void* outValue) {
   int h = hash(key, ht->elementLength);
   int y = h;
-  for (int i = h; i < ht->elementLength; i++) {
-    entry *e = (entry *)ht->memory + (ht->elementStride * y);
-    if (strcmp(e->key, INVALID_KEY)) {
-      return NULL;
+  for (int i = 0; i < ht->elementLength; i++) {
+    entry *e = (entry *)(ht->memory + (sizeof(entry) * y));
+    printf("GET KEY: %s : %p\n", e->key, e->value);
+    printf("EK %s: k %s\n", e->key, key);
+    if (!strcmp(e->key, INVALID_KEY)) {
+      return;
     }
-    if (strcmp(e->key, key)) {
-      return e->value;
+    printf("S %d\n", strcmp(e->key, key));
+    printf("STR: %d\n", ht->elementStride);
+    printf("EVS %lu\n", sizeof(e->value));
+    printf("EV %p\n", e->value);
+    printf("OV %p\n", outValue);
+    if (!strcmp(e->key, key)) {
+        if (!ht->isPointerData){
+            memcpy(outValue, (void*)e->value, ht->elementStride);
+        }else{
+            memcpy(outValue, e->value, ht->elementStride);
+        }
+        printf("Val %p\n", outValue);
+        return;
     }
     y++;
     y = y % ht->elementLength;
   }
-  return NULL;
+  return;
 }
 
 void hashtableFill(hashtable *ht, void *value) {
   for (int i = 0; i < ht->elementLength; i++) {
-    entry *e = (entry *)ht->memory + (ht->elementStride * ht->elementLength);
+    entry *e = (entry *)(ht->memory + (sizeof(entry) * i));
     memcpy(e->value, value, sizeof(ht->elementStride));
   }
 }
 // "Secret" function to make all the slots invalid when ht is created
 void hashtableFillEntry(hashtable *ht, entry *value) {
   for (int i = 0; i < ht->elementLength; i++) {
-    entry *e = (entry *)ht->memory + (ht->elementStride * ht->elementLength);
+    entry *e = (entry *)(ht->memory + (sizeof(entry) * i));
     memcpy(e, value, sizeof(entry));
   }
 }
